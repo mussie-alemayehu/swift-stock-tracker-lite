@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { format } from "date-fns";
@@ -89,7 +88,6 @@ const InventoryForm = ({
   });
 
   const handleSubmit = (values: FormValues) => {
-    // Check if SKU is unique (if provided)
     if (values.sku) {
       const isDuplicateSku = items.some(
         item => item.sku === values.sku && (!itemToEdit || item.id !== itemToEdit.id)
@@ -104,21 +102,19 @@ const InventoryForm = ({
       }
     }
     
-    // If editing, update existing item
     if (itemToEdit) {
       onSubmit({
         ...itemToEdit,
         ...values,
-        name: values.name,        // Explicitly include required fields
+        name: values.name,
         quantity: values.quantity,
         unit: values.unit
       });
     } else {
-      // Add new item with a unique ID
       onSubmit({
         ...values,
         id: uuidv4(),
-        name: values.name,        // Explicitly include required fields
+        name: values.name,
         quantity: values.quantity,
         unit: values.unit
       });

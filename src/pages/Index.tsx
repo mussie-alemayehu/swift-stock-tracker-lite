@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from "react";
 import { PlusCircle } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { 
   Dialog, 
@@ -16,7 +16,6 @@ import EmptyState from "@/components/EmptyState";
 import { InventoryItem } from "@/lib/types";
 
 const Index = () => {
-  const { toast } = useToast();
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
@@ -46,9 +45,8 @@ const Index = () => {
   const handleAddItem = (newItem: InventoryItem) => {
     setItems((prevItems) => [...prevItems, newItem]);
     setIsFormOpen(false);
-    toast({
-      title: "Item Added",
-      description: `${newItem.name} has been added to inventory.`,
+    toast.success(`${newItem.name} has been added to inventory.`, {
+      description: "Inventory updated successfully."
     });
   };
 
@@ -57,20 +55,18 @@ const Index = () => {
       prevItems.map((item) => (item.id === updatedItem.id ? updatedItem : item))
     );
     setEditingItem(null);
-    toast({
-      title: "Item Updated",
-      description: `${updatedItem.name} has been updated.`,
+    toast.success(`${updatedItem.name} has been updated.`, {
+      description: "Inventory updated successfully."
     });
   };
 
   const handleDeleteItem = (id: string) => {
     const itemToDelete = items.find((item) => item.id === id);
     setItems((prevItems) => prevItems.filter((item) => item.id !== id));
-    toast({
-      title: "Item Deleted",
-      description: itemToDelete 
-        ? `${itemToDelete.name} has been removed from inventory.`
-        : "Item has been removed from inventory.",
+    toast.error(itemToDelete 
+      ? `${itemToDelete.name} has been removed from inventory.`
+      : "Item has been removed from inventory.", {
+      description: "Inventory updated successfully."
     });
   };
 
