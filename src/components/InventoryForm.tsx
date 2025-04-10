@@ -92,7 +92,7 @@ const InventoryForm = ({
     // Check if SKU is unique (if provided)
     if (values.sku) {
       const isDuplicateSku = items.some(
-        item => item.sku === values.sku
+        item => item.sku === values.sku && (!itemToEdit || item.id !== itemToEdit.id)
       );
       
       if (isDuplicateSku) {
@@ -107,14 +107,20 @@ const InventoryForm = ({
     // If editing, update existing item
     if (itemToEdit) {
       onSubmit({
+        ...itemToEdit,
         ...values,
-        id: itemToEdit.id,
+        name: values.name,        // Explicitly include required fields
+        quantity: values.quantity,
+        unit: values.unit
       });
     } else {
       // Add new item with a unique ID
       onSubmit({
         ...values,
         id: uuidv4(),
+        name: values.name,        // Explicitly include required fields
+        quantity: values.quantity,
+        unit: values.unit
       });
     }
   };
