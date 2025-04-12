@@ -1,6 +1,6 @@
 
 import { useState } from "react";
-import { PlusCircle, Search, AlertTriangle, LogOut } from "lucide-react";
+import { PlusCircle, Search, LogOut, FileUp, FileDown } from "lucide-react";
 import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
 import { Button } from "@/components/ui/button";
@@ -18,11 +18,16 @@ import InventoryTable from "@/components/InventoryTable";
 import InventoryForm from "@/components/InventoryForm";
 import StockAdjustmentForm from "@/components/StockAdjustmentForm";
 import StockMovementHistory from "@/components/StockMovementHistory";
+import InventoryPagination from "@/components/InventoryPagination";
+import ExportInventoryButton from "@/components/ExportInventoryButton";
+import ImportInventoryDialog from "@/components/ImportInventoryDialog";
 import EmptyState from "@/components/EmptyState";
 import { InventoryItem, StockMovement } from "@/lib/types";
 import { useAuth } from "@/lib/AuthContext";
 import { inventoryService } from "@/lib/inventoryService";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+
+const ITEMS_PER_PAGE = 10;
 
 const Index = () => {
   const { user, signOut } = useAuth();
@@ -30,10 +35,12 @@ const Index = () => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isAdjustFormOpen, setIsAdjustFormOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<string>("all");
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Fetch inventory items
   const { data: items = [], isLoading } = useQuery({
@@ -172,6 +179,11 @@ const Index = () => {
     setEditingItem(item);
   };
 
+  const handleImportComplete = () => {
+    queryClient.invalidateQueries({ queryKey: ['inventory-items'] });
+    setIsImportDialogOpen(false);
+  };
+
   // Filter items based on search query and active tab
   const filteredItems = items.filter((item) => {
     // Filter by search query
@@ -189,6 +201,18 @@ const Index = () => {
     
     return matchesSearch;
   });
+
+  // Paginate items
+  const totalPages = Math.max(1, Math.ceil(filteredItems.length / ITEMS_PER_PAGE));
+  
+  // Ensure current page is valid
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  if (safeCurrentPage !== currentPage) {
+    setCurrentPage(safeCurrentPage);
+  }
+  
+  const startIndex = (safeCurrentPage - 1) * ITEMS_PER_PAGE;
+  const paginatedItems = filteredItems.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
   // Count low stock items
   const lowStockCount = items.filter(
@@ -231,13 +255,24 @@ const Index = () => {
               )}
             </p>
           </div>
-          <Button 
-            onClick={() => setIsFormOpen(true)}
-            className="mt-4 sm:mt-0"
-          >
-            <PlusCircle className="mr-2 h-4 w-4" />
-            Add New Item
-          </Button>
+          <div className="flex flex-col sm:flex-row gap-2 mt-4 sm:mt-0">
+            <ExportInventoryButton className="w-full sm:w-auto" />
+            <Button 
+              variant="outline"
+              onClick={() => setIsImportDialogOpen(true)}
+              className="w-full sm:w-auto"
+            >
+              <FileUp className="mr-2 h-4 w-4" />
+              Import
+            </Button>
+            <Button 
+              onClick={() => setIsFormOpen(true)}
+              className="w-full sm:w-auto"
+            >
+              <PlusCircle className="mr-2 h-4 w-4" />
+              Add New Item
+            </Button>
+          </div>
         </div>
 
         {/* Search Bar */}
@@ -249,7 +284,10 @@ const Index = () => {
             type="text"
             placeholder="Search items by name, description, supplier or SKU..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setCurrentPage(1); // Reset to first page on search
+            }}
             className="pl-10 py-2"
           />
           {searchQuery && (
@@ -257,7 +295,10 @@ const Index = () => {
               <Button 
                 variant="ghost" 
                 size="sm" 
-                onClick={() => setSearchQuery("")}
+                onClick={() => {
+                  setSearchQuery("");
+                  setCurrentPage(1); // Reset to first page when clearing
+                }}
                 className="h-6 w-6 p-0"
               >
                 ×
@@ -270,7 +311,10 @@ const Index = () => {
         <Tabs 
           defaultValue="all" 
           value={activeTab} 
-          onValueChange={setActiveTab}
+          onValueChange={(val) => {
+            setActiveTab(val);
+            setCurrentPage(1); // Reset to first page on tab change
+          }}
           className="mb-6"
         >
           <TabsList>
@@ -294,6 +338,7 @@ const Index = () => {
               onClick={() => {
                 setSearchQuery("");
                 setActiveTab("all");
+                setCurrentPage(1);
               }}
               className="mt-2"
             >
@@ -303,13 +348,30 @@ const Index = () => {
         ) : filteredItems.length === 0 ? (
           <EmptyState onAddItem={() => setIsFormOpen(true)} />
         ) : (
-          <InventoryTable 
-            items={filteredItems}
-            onEdit={openEditDialog}
-            onDelete={handleDeleteItem}
-            onAdjustStock={handleAdjustStock}
-            onViewHistory={handleViewHistory}
-          />
+          <>
+            <InventoryTable 
+              items={paginatedItems}
+              onEdit={openEditDialog}
+              onDelete={handleDeleteItem}
+              onAdjustStock={handleAdjustStock}
+              onViewHistory={handleViewHistory}
+            />
+            
+            {/* Pagination */}
+            <div className="flex justify-center mt-4">
+              <InventoryPagination 
+                currentPage={safeCurrentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+              />
+            </div>
+            
+            {/* Items per page information */}
+            <div className="text-center text-sm text-gray-500 mt-2">
+              Showing {paginatedItems.length} of {filteredItems.length} items
+              {searchQuery && " (filtered)"}
+            </div>
+          </>
         )}
       </div>
 
@@ -391,6 +453,17 @@ const Index = () => {
             />
           )}
         </DialogContent>
+      </Dialog>
+
+      {/* Import Inventory Dialog */}
+      <Dialog
+        open={isImportDialogOpen}
+        onOpenChange={(open) => !open && setIsImportDialogOpen(false)}
+      >
+        <ImportInventoryDialog
+          onImportComplete={handleImportComplete}
+          onCancel={() => setIsImportDialogOpen(false)}
+        />
       </Dialog>
     </div>
   );

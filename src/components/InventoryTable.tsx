@@ -9,6 +9,8 @@ import {
   ChevronUp,
   RefreshCcw,
   AlertTriangle,
+  Menu,
+  MoreVertical
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { 
@@ -92,6 +94,119 @@ const InventoryTable = ({
     return item.quantity <= item.minStockThreshold;
   };
 
+  // Generate table header with sort buttons
+  const renderSortableHeader = (
+    label: string, 
+    field: SortField, 
+    className?: string
+  ) => (
+    <Button
+      variant="ghost"
+      onClick={() => toggleSort(field)}
+      className={cn("flex items-center px-0 font-semibold", className)}
+    >
+      {label}
+      <span className="ml-2">
+        {sortField === field ? (
+          sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+        ) : (
+          <ArrowUpDown className="h-4 w-4" />
+        )}
+      </span>
+    </Button>
+  );
+
+  // Action buttons for each row
+  const ActionButtons = ({ item }: { item: InventoryItem }) => (
+    <div className="flex justify-end items-center space-x-1">
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => onAdjustStock(item)}
+        title="Adjust Stock"
+        className="h-8 w-8 hidden sm:flex"
+      >
+        <RefreshCcw className="h-4 w-4" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => onViewHistory(item)}
+        title="View History"
+        className="h-8 w-8 hidden sm:flex"
+      >
+        <svg className="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+        </svg>
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => onEdit(item)}
+        title="Edit Item"
+        className="h-8 w-8 hidden sm:flex"
+      >
+        <Edit className="h-4 w-4" />
+      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            title="Delete Item"
+            className="h-8 w-8 text-destructive hidden sm:flex"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="bg-white">
+          <DropdownMenuItem
+            className="text-destructive focus:text-destructive cursor-pointer"
+            onClick={() => onDelete(item.id)}
+          >
+            Confirm Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {/* Mobile menu */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 sm:hidden"
+          >
+            <MoreVertical className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="bg-white">
+          <DropdownMenuItem onClick={() => onAdjustStock(item)}>
+            <RefreshCcw className="h-4 w-4 mr-2" />
+            Adjust Stock
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => onViewHistory(item)}>
+            <svg className="h-4 w-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+            </svg>
+            View History
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => onEdit(item)}>
+            <Edit className="h-4 w-4 mr-2" />
+            Edit Item
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className="text-destructive focus:text-destructive"
+            onClick={() => onDelete(item.id)}
+          >
+            <Trash2 className="h-4 w-4 mr-2" />
+            Delete Item
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+
   return (
     <div className="bg-white rounded-lg shadow-sm overflow-hidden">
       <div className="overflow-x-auto">
@@ -99,58 +214,19 @@ const InventoryTable = ({
           <TableHeader>
             <TableRow>
               <TableHead className="w-[200px]">
-                <Button
-                  variant="ghost"
-                  onClick={() => toggleSort('name')}
-                  className="flex items-center px-0 font-semibold"
-                >
-                  Item Name
-                  <span className="ml-2">
-                    {sortField === 'name' ? (
-                      sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                    ) : (
-                      <ArrowUpDown className="h-4 w-4" />
-                    )}
-                  </span>
-                </Button>
+                {renderSortableHeader('Item Name', 'name')}
               </TableHead>
-              <TableHead>Description</TableHead>
+              <TableHead className="hidden md:table-cell">Description</TableHead>
               <TableHead className="w-[120px]">
-                <Button
-                  variant="ghost"
-                  onClick={() => toggleSort('quantity')}
-                  className="flex items-center px-0 font-semibold"
-                >
-                  Quantity
-                  <span className="ml-2">
-                    {sortField === 'quantity' ? (
-                      sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                    ) : (
-                      <ArrowUpDown className="h-4 w-4" />
-                    )}
-                  </span>
-                </Button>
+                {renderSortableHeader('Quantity', 'quantity')}
               </TableHead>
-              <TableHead>Unit</TableHead>
-              <TableHead className="w-[150px]">
-                <Button
-                  variant="ghost"
-                  onClick={() => toggleSort('purchaseDate')}
-                  className="flex items-center px-0 font-semibold"
-                >
-                  Purchase Date
-                  <span className="ml-2">
-                    {sortField === 'purchaseDate' ? (
-                      sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                    ) : (
-                      <ArrowUpDown className="h-4 w-4" />
-                    )}
-                  </span>
-                </Button>
+              <TableHead className="hidden sm:table-cell">Unit</TableHead>
+              <TableHead className="hidden lg:table-cell w-[150px]">
+                {renderSortableHeader('Purchase Date', 'purchaseDate')}
               </TableHead>
-              <TableHead>Supplier</TableHead>
-              <TableHead>SKU/Code</TableHead>
-              <TableHead>Min. Stock</TableHead>
+              <TableHead className="hidden lg:table-cell">Supplier</TableHead>
+              <TableHead className="hidden xl:table-cell">SKU/Code</TableHead>
+              <TableHead className="hidden md:table-cell">Min. Stock</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -179,8 +255,13 @@ const InventoryTable = ({
                       </TooltipProvider>
                     )}
                   </div>
+                  {/* Mobile-only information */}
+                  <div className="block sm:hidden mt-1 text-xs text-gray-500">
+                    <div><span className="font-medium">Unit:</span> {item.unit}</div>
+                    <div><span className="font-medium">Min Stock:</span> {item.minStockThreshold || "—"}</div>
+                  </div>
                 </TableCell>
-                <TableCell className="max-w-[250px] truncate">
+                <TableCell className="max-w-[250px] truncate hidden md:table-cell">
                   {item.description || "—"}
                 </TableCell>
                 <TableCell>
@@ -193,69 +274,19 @@ const InventoryTable = ({
                     )}
                   </div>
                 </TableCell>
-                <TableCell>
+                <TableCell className="hidden sm:table-cell">
                   <span className="capitalize">{item.unit}</span>
                 </TableCell>
-                <TableCell>
+                <TableCell className="hidden lg:table-cell">
                   {item.purchaseDate
                     ? format(item.purchaseDate, "MMM d, yyyy")
                     : "—"}
                 </TableCell>
-                <TableCell>{item.supplier || "—"}</TableCell>
-                <TableCell>{item.sku || "—"}</TableCell>
-                <TableCell>{item.minStockThreshold || "—"}</TableCell>
+                <TableCell className="hidden lg:table-cell">{item.supplier || "—"}</TableCell>
+                <TableCell className="hidden xl:table-cell">{item.sku || "—"}</TableCell>
+                <TableCell className="hidden md:table-cell">{item.minStockThreshold || "—"}</TableCell>
                 <TableCell className="text-right">
-                  <div className="flex justify-end items-center space-x-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => onAdjustStock(item)}
-                      title="Adjust Stock"
-                      className="h-8 w-8"
-                    >
-                      <RefreshCcw className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => onViewHistory(item)}
-                      title="View History"
-                      className="h-8 w-8"
-                    >
-                      <svg className="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                      </svg>
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => onEdit(item)}
-                      title="Edit Item"
-                      className="h-8 w-8"
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          title="Delete Item"
-                          className="h-8 w-8 text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="bg-white">
-                        <DropdownMenuItem
-                          className="text-destructive focus:text-destructive cursor-pointer"
-                          onClick={() => onDelete(item.id)}
-                        >
-                          Confirm Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
+                  <ActionButtons item={item} />
                 </TableCell>
               </TableRow>
             ))}
