@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { format } from "date-fns";
@@ -32,21 +33,24 @@ import {
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
-import { InventoryItem } from "@/lib/types";
+import { InventoryItem, Unit } from "@/lib/types";
 
-const units = ["pieces", "kg", "liters", "boxes", "meters", "pairs"];
+const units: Unit[] = ["pieces", "kg", "liters", "boxes", "meters", "pairs"];
 
 // Schema for form validation
 const formSchema = z.object({
   name: z.string().min(1, "Item name is required"),
   description: z.string().optional(),
   quantity: z.coerce.number().min(0, "Quantity must be 0 or greater"),
-  unit: z.enum(["pieces", "kg", "liters", "boxes", "meters", "pairs"]),
+  unit: z.enum(["pieces", "kg", "liters", "boxes", "meters", "pairs"] as const),
   purchaseDate: z.date().optional(),
   supplier: z.string().optional(),
   sku: z.string().optional(),
   minStockThreshold: z.coerce.number().min(0, "Threshold must be 0 or greater").optional(),
 });
+
+// Define the form values type based on the schema
+type FormValues = z.infer<typeof formSchema>;
 
 interface InventoryFormProps {
   itemToEdit?: InventoryItem;
@@ -58,7 +62,7 @@ interface InventoryFormProps {
 const InventoryForm = ({ itemToEdit, onSubmit, onCancel, items }: InventoryFormProps) => {
   const [datePickerOpen, setDatePickerOpen] = useState(false);
 
-  const form = useForm({
+  const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: itemToEdit
       ? {
@@ -82,7 +86,7 @@ const InventoryForm = ({ itemToEdit, onSubmit, onCancel, items }: InventoryFormP
         },
   });
 
-  const handleSubmit = (values: z.infer<typeof formSchema>) => {
+  const handleSubmit = (values: FormValues) => {
     if (values.sku) {
       const isDuplicateSku = items.some((item) => 
         item.sku === values.sku && (!itemToEdit || item.id !== itemToEdit.id)
