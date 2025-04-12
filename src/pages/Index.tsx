@@ -1,7 +1,8 @@
 
 import { useState, useEffect } from "react";
-import { PlusCircle, Search } from "lucide-react";
+import { PlusCircle, Search, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
+import { v4 as uuidv4 } from "uuid";
 import { Button } from "@/components/ui/button";
 import { 
   Dialog, 
@@ -11,16 +12,25 @@ import {
   DialogTitle 
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import InventoryTable from "@/components/InventoryTable";
 import InventoryForm from "@/components/InventoryForm";
+import StockAdjustmentForm from "@/components/StockAdjustmentForm";
+import StockMovementHistory from "@/components/StockMovementHistory";
 import EmptyState from "@/components/EmptyState";
-import { InventoryItem } from "@/lib/types";
+import { InventoryItem, StockMovement } from "@/lib/types";
 
 const Index = () => {
   const [items, setItems] = useState<InventoryItem[]>([]);
+  const [movements, setMovements] = useState<StockMovement[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isAdjustFormOpen, setIsAdjustFormOpen] = useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
+  const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [activeTab, setActiveTab] = useState<string>("all");
 
   // Load items from localStorage on initial render
   useEffect(() => {
@@ -37,12 +47,31 @@ const Index = () => {
         console.error("Failed to parse saved inventory items:", error);
       }
     }
+
+    const savedMovements = localStorage.getItem("stockMovements");
+    if (savedMovements) {
+      try {
+        // Convert date strings back to Date objects
+        const parsedMovements = JSON.parse(savedMovements).map((movement: any) => ({
+          ...movement,
+          timestamp: movement.timestamp ? new Date(movement.timestamp) : new Date(),
+        }));
+        setMovements(parsedMovements);
+      } catch (error) {
+        console.error("Failed to parse saved stock movements:", error);
+      }
+    }
   }, []);
 
   // Save items to localStorage whenever they change
   useEffect(() => {
     localStorage.setItem("inventoryItems", JSON.stringify(items));
   }, [items]);
+
+  // Save movements to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem("stockMovements", JSON.stringify(movements));
+  }, [movements]);
 
   const handleAddItem = (newItem: InventoryItem) => {
     setItems((prevItems) => [...prevItems, newItem]);
@@ -64,7 +93,15 @@ const Index = () => {
 
   const handleDeleteItem = (id: string) => {
     const itemToDelete = items.find((item) => item.id === id);
+    
+    // Delete associated stock movements
+    setMovements(prevMovements => 
+      prevMovements.filter(movement => movement.itemId !== id)
+    );
+    
+    // Delete the item
     setItems((prevItems) => prevItems.filter((item) => item.id !== id));
+    
     toast.error(itemToDelete 
       ? `${itemToDelete.name} has been removed from inventory.`
       : "Item has been removed from inventory.", {
@@ -72,22 +109,79 @@ const Index = () => {
     });
   };
 
+  const handleAdjustStock = (item: InventoryItem) => {
+    setSelectedItem(item);
+    setIsAdjustFormOpen(true);
+  };
+
+  const handleViewHistory = (item: InventoryItem) => {
+    setSelectedItem(item);
+    setIsHistoryOpen(true);
+  };
+
+  const handleStockAdjustment = (
+    itemId: string, 
+    adjustment: Omit<StockMovement, "id" | "timestamp" | "itemId">
+  ) => {
+    // Create the stock movement record
+    const newMovement: StockMovement = {
+      id: uuidv4(),
+      itemId,
+      timestamp: new Date(),
+      ...adjustment
+    };
+    
+    setMovements(prev => [...prev, newMovement]);
+    
+    // Update the item quantity
+    setItems(prev => 
+      prev.map(item => {
+        if (item.id === itemId) {
+          return {
+            ...item,
+            quantity: adjustment.quantityAfter
+          };
+        }
+        return item;
+      })
+    );
+    
+    setIsAdjustFormOpen(false);
+    
+    toast.success(
+      `Stock ${adjustment.adjustmentType === "increase" ? "increased" : "reduced"} successfully.`, 
+      {
+        description: `New quantity: ${adjustment.quantityAfter}`
+      }
+    );
+  };
+
   const openEditDialog = (item: InventoryItem) => {
     setEditingItem(item);
   };
 
-  // Filter items based on search query
+  // Filter items based on search query and active tab
   const filteredItems = items.filter((item) => {
-    if (!searchQuery.trim()) return true;
+    // Filter by search query
+    const matchesSearch = !searchQuery.trim() || 
+      item.name.toLowerCase().includes(searchQuery.toLowerCase().trim()) ||
+      (item.description?.toLowerCase().includes(searchQuery.toLowerCase().trim())) ||
+      (item.supplier?.toLowerCase().includes(searchQuery.toLowerCase().trim())) ||
+      (item.sku?.toLowerCase().includes(searchQuery.toLowerCase().trim()));
     
-    const query = searchQuery.toLowerCase().trim();
-    return (
-      item.name.toLowerCase().includes(query) ||
-      (item.description?.toLowerCase().includes(query)) ||
-      (item.supplier?.toLowerCase().includes(query)) ||
-      (item.sku?.toLowerCase().includes(query))
-    );
+    // Filter by tab
+    if (activeTab === "low-stock") {
+      return matchesSearch && item.minStockThreshold !== undefined && 
+        item.quantity <= item.minStockThreshold;
+    }
+    
+    return matchesSearch;
   });
+
+  // Count low stock items
+  const lowStockCount = items.filter(
+    item => item.minStockThreshold !== undefined && item.quantity <= item.minStockThreshold
+  ).length;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -134,15 +228,38 @@ const Index = () => {
           )}
         </div>
 
+        {/* Tabs */}
+        <Tabs 
+          defaultValue="all" 
+          value={activeTab} 
+          onValueChange={setActiveTab}
+          className="mb-6"
+        >
+          <TabsList>
+            <TabsTrigger value="all">All Items</TabsTrigger>
+            <TabsTrigger value="low-stock" className="flex items-center">
+              Low Stock
+              {lowStockCount > 0 && (
+                <Badge variant="destructive" className="ml-2">
+                  {lowStockCount}
+                </Badge>
+              )}
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+
         {filteredItems.length === 0 && items.length > 0 ? (
           <div className="text-center py-8 bg-white rounded-lg shadow-sm">
             <p className="text-gray-500">No items match your search criteria.</p>
             <Button 
               variant="link" 
-              onClick={() => setSearchQuery("")}
+              onClick={() => {
+                setSearchQuery("");
+                setActiveTab("all");
+              }}
               className="mt-2"
             >
-              Clear search
+              Clear filters
             </Button>
           </div>
         ) : filteredItems.length === 0 ? (
@@ -152,11 +269,13 @@ const Index = () => {
             items={filteredItems}
             onEdit={openEditDialog}
             onDelete={handleDeleteItem}
+            onAdjustStock={handleAdjustStock}
+            onViewHistory={handleViewHistory}
           />
         )}
       </div>
 
-      {/* Add Item Dialog */}
+      {/* Add/Edit Item Dialog */}
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
@@ -188,6 +307,49 @@ const Index = () => {
               onSubmit={handleEditItem}
               onCancel={() => setEditingItem(null)}
               items={items.filter(item => item.id !== editingItem.id)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Stock Adjustment Dialog */}
+      <Dialog 
+        open={isAdjustFormOpen} 
+        onOpenChange={(open) => !open && setIsAdjustFormOpen(false)}
+      >
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Adjust Stock</DialogTitle>
+            <DialogDescription>
+              Increase or reduce the quantity of this item
+            </DialogDescription>
+          </DialogHeader>
+          {selectedItem && (
+            <StockAdjustmentForm
+              item={selectedItem}
+              onAdjust={handleStockAdjustment}
+              onCancel={() => setIsAdjustFormOpen(false)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Stock Movement History Dialog */}
+      <Dialog 
+        open={isHistoryOpen} 
+        onOpenChange={(open) => !open && setIsHistoryOpen(false)}
+      >
+        <DialogContent className="sm:max-w-[800px]">
+          <DialogHeader>
+            <DialogTitle>Stock Movement History</DialogTitle>
+            <DialogDescription>
+              View all stock adjustments for this item
+            </DialogDescription>
+          </DialogHeader>
+          {selectedItem && (
+            <StockMovementHistory
+              item={selectedItem}
+              movements={movements.filter(m => m.itemId === selectedItem.id)}
             />
           )}
         </DialogContent>

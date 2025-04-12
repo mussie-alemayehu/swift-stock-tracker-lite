@@ -5,6 +5,7 @@ import { CalendarIcon } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -31,24 +32,21 @@ import {
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
-import { InventoryItem, Unit } from "@/lib/types";
+import { InventoryItem } from "@/lib/types";
 
-const units: Unit[] = ["pieces", "kg", "liters", "boxes", "meters", "pairs"];
+const units = ["pieces", "kg", "liters", "boxes", "meters", "pairs"];
 
 // Schema for form validation
 const formSchema = z.object({
   name: z.string().min(1, "Item name is required"),
   description: z.string().optional(),
-  quantity: z.coerce
-    .number()
-    .min(0, "Quantity must be 0 or greater"),
+  quantity: z.coerce.number().min(0, "Quantity must be 0 or greater"),
   unit: z.enum(["pieces", "kg", "liters", "boxes", "meters", "pairs"]),
   purchaseDate: z.date().optional(),
   supplier: z.string().optional(),
   sku: z.string().optional(),
+  minStockThreshold: z.coerce.number().min(0, "Threshold must be 0 or greater").optional(),
 });
-
-type FormValues = z.infer<typeof formSchema>;
 
 interface InventoryFormProps {
   itemToEdit?: InventoryItem;
@@ -57,15 +55,10 @@ interface InventoryFormProps {
   items: InventoryItem[];
 }
 
-const InventoryForm = ({
-  itemToEdit,
-  onSubmit,
-  onCancel,
-  items
-}: InventoryFormProps) => {
+const InventoryForm = ({ itemToEdit, onSubmit, onCancel, items }: InventoryFormProps) => {
   const [datePickerOpen, setDatePickerOpen] = useState(false);
 
-  const form = useForm<FormValues>({
+  const form = useForm({
     resolver: zodResolver(formSchema),
     defaultValues: itemToEdit
       ? {
@@ -76,6 +69,7 @@ const InventoryForm = ({
           purchaseDate: itemToEdit.purchaseDate,
           supplier: itemToEdit.supplier || "",
           sku: itemToEdit.sku || "",
+          minStockThreshold: itemToEdit.minStockThreshold || 0,
         }
       : {
           name: "",
@@ -84,40 +78,35 @@ const InventoryForm = ({
           unit: "pieces",
           supplier: "",
           sku: "",
+          minStockThreshold: 0,
         },
   });
 
-  const handleSubmit = (values: FormValues) => {
+  const handleSubmit = (values: z.infer<typeof formSchema>) => {
     if (values.sku) {
-      const isDuplicateSku = items.some(
-        item => item.sku === values.sku && (!itemToEdit || item.id !== itemToEdit.id)
+      const isDuplicateSku = items.some((item) => 
+        item.sku === values.sku && (!itemToEdit || item.id !== itemToEdit.id)
       );
       
       if (isDuplicateSku) {
-        form.setError("sku", { 
-          type: "manual", 
-          message: "This SKU already exists. Please use a unique value."
+        form.setError("sku", {
+          type: "manual",
+          message: "This SKU already exists. Please use a unique value.",
         });
         return;
       }
     }
-    
+
     if (itemToEdit) {
       onSubmit({
-        ...itemToEdit,
         ...values,
-        name: values.name,
-        quantity: values.quantity,
-        unit: values.unit
-      });
+        id: itemToEdit.id,
+      } as InventoryItem);
     } else {
       onSubmit({
         ...values,
         id: uuidv4(),
-        name: values.name,
-        quantity: values.quantity,
-        unit: values.unit
-      });
+      } as InventoryItem);
     }
   };
 
@@ -291,10 +280,43 @@ const InventoryForm = ({
               </FormItem>
             )}
           />
+
+          <FormField
+            control={form.control}
+            name="minStockThreshold"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Minimum Stock Threshold</FormLabel>
+                <FormControl>
+                  <Input
+                    type="number"
+                    min="0"
+                    {...field}
+                    onChange={(e) => {
+                      const value = parseInt(e.target.value);
+                      if (!isNaN(value) && value >= 0) {
+                        field.onChange(value);
+                      } else if (e.target.value === "") {
+                        field.onChange("");
+                      }
+                    }}
+                  />
+                </FormControl>
+                <FormDescription>
+                  Set a minimum threshold for low stock alerts
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
         </div>
 
         <div className="flex justify-end space-x-4 pt-4">
-          <Button type="button" variant="outline" onClick={onCancel}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onCancel}
+          >
             Cancel
           </Button>
           <Button type="submit">

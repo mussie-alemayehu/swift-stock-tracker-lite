@@ -7,6 +7,8 @@ import {
   Trash2,
   ChevronDown,
   ChevronUp,
+  RefreshCcw,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { 
@@ -23,6 +25,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { InventoryItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -33,9 +37,17 @@ interface InventoryTableProps {
   items: InventoryItem[];
   onEdit: (item: InventoryItem) => void;
   onDelete: (id: string) => void;
+  onAdjustStock: (item: InventoryItem) => void;
+  onViewHistory: (item: InventoryItem) => void;
 }
 
-const InventoryTable = ({ items, onEdit, onDelete }: InventoryTableProps) => {
+const InventoryTable = ({ 
+  items, 
+  onEdit, 
+  onDelete, 
+  onAdjustStock,
+  onViewHistory
+}: InventoryTableProps) => {
   const [sortField, setSortField] = useState<SortField>('name');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
 
@@ -74,6 +86,11 @@ const InventoryTable = ({ items, onEdit, onDelete }: InventoryTableProps) => {
     
     return 0;
   });
+
+  const isLowStock = (item: InventoryItem): boolean => {
+    if (item.minStockThreshold === undefined) return false;
+    return item.quantity <= item.minStockThreshold;
+  };
 
   return (
     <div className="bg-white rounded-lg shadow-sm overflow-hidden">
@@ -133,17 +150,49 @@ const InventoryTable = ({ items, onEdit, onDelete }: InventoryTableProps) => {
               </TableHead>
               <TableHead>Supplier</TableHead>
               <TableHead>SKU/Code</TableHead>
+              <TableHead>Min. Stock</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {sortedItems.map((item) => (
-              <TableRow key={item.id} className="hover:bg-gray-50">
-                <TableCell className="font-medium">{item.name}</TableCell>
+              <TableRow 
+                key={item.id} 
+                className={cn(
+                  "hover:bg-gray-50",
+                  isLowStock(item) && "bg-red-50 hover:bg-red-100"
+                )}
+              >
+                <TableCell className="font-medium">
+                  <div className="flex items-center">
+                    {item.name}
+                    {isLowStock(item) && (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <AlertTriangle className="h-4 w-4 text-red-500 ml-2" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Low stock alert! Below minimum threshold.</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
+                  </div>
+                </TableCell>
                 <TableCell className="max-w-[250px] truncate">
                   {item.description || "—"}
                 </TableCell>
-                <TableCell>{item.quantity}</TableCell>
+                <TableCell>
+                  <div className="flex items-center">
+                    <span className={isLowStock(item) ? "text-red-600 font-semibold" : ""}>
+                      {item.quantity}
+                    </span>
+                    {isLowStock(item) && (
+                      <Badge variant="destructive" className="ml-2 text-xs">Low</Badge>
+                    )}
+                  </div>
+                </TableCell>
                 <TableCell>
                   <span className="capitalize">{item.unit}</span>
                 </TableCell>
@@ -154,34 +203,59 @@ const InventoryTable = ({ items, onEdit, onDelete }: InventoryTableProps) => {
                 </TableCell>
                 <TableCell>{item.supplier || "—"}</TableCell>
                 <TableCell>{item.sku || "—"}</TableCell>
-                <TableCell className="text-right space-x-1">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => onEdit(item)}
-                    className="h-8 w-8"
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="bg-white">
-                      <DropdownMenuItem
-                        className="text-destructive focus:text-destructive cursor-pointer"
-                        onClick={() => onDelete(item.id)}
-                      >
-                        Confirm Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                <TableCell>{item.minStockThreshold || "—"}</TableCell>
+                <TableCell className="text-right">
+                  <div className="flex justify-end items-center space-x-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => onAdjustStock(item)}
+                      title="Adjust Stock"
+                      className="h-8 w-8"
+                    >
+                      <RefreshCcw className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => onViewHistory(item)}
+                      title="View History"
+                      className="h-8 w-8"
+                    >
+                      <svg className="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                      </svg>
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => onEdit(item)}
+                      title="Edit Item"
+                      className="h-8 w-8"
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title="Delete Item"
+                          className="h-8 w-8 text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="bg-white">
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive cursor-pointer"
+                          onClick={() => onDelete(item.id)}
+                        >
+                          Confirm Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
