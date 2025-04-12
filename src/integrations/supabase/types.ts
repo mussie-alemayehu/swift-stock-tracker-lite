@@ -9,7 +9,95 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      inventory_items: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          min_stock_threshold: number | null
+          name: string
+          purchase_date: string | null
+          quantity: number
+          sku: string | null
+          supplier: string | null
+          unit: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          min_stock_threshold?: number | null
+          name: string
+          purchase_date?: string | null
+          quantity?: number
+          sku?: string | null
+          supplier?: string | null
+          unit: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          min_stock_threshold?: number | null
+          name?: string
+          purchase_date?: string | null
+          quantity?: number
+          sku?: string | null
+          supplier?: string | null
+          unit?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      stock_movements: {
+        Row: {
+          adjustment_type: string
+          id: string
+          item_id: string
+          notes: string | null
+          quantity_after: number
+          quantity_before: number
+          reason: string
+          timestamp: string
+          user_id: string
+        }
+        Insert: {
+          adjustment_type: string
+          id?: string
+          item_id: string
+          notes?: string | null
+          quantity_after: number
+          quantity_before: number
+          reason: string
+          timestamp?: string
+          user_id: string
+        }
+        Update: {
+          adjustment_type?: string
+          id?: string
+          item_id?: string
+          notes?: string | null
+          quantity_after?: number
+          quantity_before?: number
+          reason?: string
+          timestamp?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_movements_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

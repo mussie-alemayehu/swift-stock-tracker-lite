@@ -1,6 +1,6 @@
 
-import { useState, useEffect } from "react";
-import { PlusCircle, Search, AlertTriangle } from "lucide-react";
+import { useState } from "react";
+import { PlusCircle, Search, AlertTriangle, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
 import { Button } from "@/components/ui/button";
@@ -20,10 +20,13 @@ import StockAdjustmentForm from "@/components/StockAdjustmentForm";
 import StockMovementHistory from "@/components/StockMovementHistory";
 import EmptyState from "@/components/EmptyState";
 import { InventoryItem, StockMovement } from "@/lib/types";
+import { useAuth } from "@/lib/AuthContext";
+import { inventoryService } from "@/lib/inventoryService";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 const Index = () => {
-  const [items, setItems] = useState<InventoryItem[]>([]);
-  const [movements, setMovements] = useState<StockMovement[]>([]);
+  const { user, signOut } = useAuth();
+  const queryClient = useQueryClient();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isAdjustFormOpen, setIsAdjustFormOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
@@ -32,81 +35,120 @@ const Index = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<string>("all");
 
-  // Load items from localStorage on initial render
-  useEffect(() => {
-    const savedItems = localStorage.getItem("inventoryItems");
-    if (savedItems) {
-      try {
-        // Convert date strings back to Date objects
-        const parsedItems = JSON.parse(savedItems).map((item: any) => ({
-          ...item,
-          purchaseDate: item.purchaseDate ? new Date(item.purchaseDate) : undefined,
-        }));
-        setItems(parsedItems);
-      } catch (error) {
-        console.error("Failed to parse saved inventory items:", error);
-      }
+  // Fetch inventory items
+  const { data: items = [], isLoading } = useQuery({
+    queryKey: ['inventory-items'],
+    queryFn: () => inventoryService.getInventoryItems(),
+  });
+
+  // Fetch stock movements for selected item
+  const { data: movements = [] } = useQuery({
+    queryKey: ['stock-movements', selectedItem?.id],
+    queryFn: () => selectedItem ? inventoryService.getStockMovements(selectedItem.id) : Promise.resolve([]),
+    enabled: !!selectedItem,
+  });
+
+  // Add item mutation
+  const addItemMutation = useMutation({
+    mutationFn: (newItem: InventoryItem) => inventoryService.addInventoryItem(newItem),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inventory-items'] });
+      setIsFormOpen(false);
+      toast.success(`Item has been added to inventory.`, {
+        description: "Inventory updated successfully."
+      });
+    },
+    onError: (error: any) => {
+      toast.error(`Failed to add item`, {
+        description: error.message || "An error occurred while adding the item."
+      });
     }
+  });
 
-    const savedMovements = localStorage.getItem("stockMovements");
-    if (savedMovements) {
-      try {
-        // Convert date strings back to Date objects
-        const parsedMovements = JSON.parse(savedMovements).map((movement: any) => ({
-          ...movement,
-          timestamp: movement.timestamp ? new Date(movement.timestamp) : new Date(),
-        }));
-        setMovements(parsedMovements);
-      } catch (error) {
-        console.error("Failed to parse saved stock movements:", error);
-      }
+  // Update item mutation
+  const updateItemMutation = useMutation({
+    mutationFn: (updatedItem: InventoryItem) => inventoryService.updateInventoryItem(updatedItem),
+    onSuccess: (updatedItem) => {
+      queryClient.invalidateQueries({ queryKey: ['inventory-items'] });
+      setEditingItem(null);
+      toast.success(`${updatedItem.name} has been updated.`, {
+        description: "Inventory updated successfully."
+      });
+    },
+    onError: (error: any) => {
+      toast.error(`Failed to update item`, {
+        description: error.message || "An error occurred while updating the item."
+      });
     }
-  }, []);
+  });
 
-  // Save items to localStorage whenever they change
-  useEffect(() => {
-    localStorage.setItem("inventoryItems", JSON.stringify(items));
-  }, [items]);
+  // Delete item mutation
+  const deleteItemMutation = useMutation({
+    mutationFn: (id: string) => inventoryService.deleteInventoryItem(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inventory-items'] });
+      toast.error(`Item has been removed from inventory.`, {
+        description: "Inventory updated successfully."
+      });
+    },
+    onError: (error: any) => {
+      toast.error(`Failed to delete item`, {
+        description: error.message || "An error occurred while deleting the item."
+      });
+    }
+  });
 
-  // Save movements to localStorage whenever they change
-  useEffect(() => {
-    localStorage.setItem("stockMovements", JSON.stringify(movements));
-  }, [movements]);
+  // Stock adjustment mutation
+  const adjustStockMutation = useMutation({
+    mutationFn: ({ 
+      itemId, 
+      adjustment 
+    }: { 
+      itemId: string; 
+      adjustment: Omit<StockMovement, "id" | "timestamp" | "itemId">
+    }) => {
+      const movement: Omit<StockMovement, "id" | "timestamp"> = {
+        ...adjustment,
+        itemId
+      };
+      return inventoryService.addStockMovement(movement);
+    },
+    onSuccess: () => {
+      // Invalidate both inventory items and stock movements queries
+      queryClient.invalidateQueries({ queryKey: ['inventory-items'] });
+      if (selectedItem) {
+        queryClient.invalidateQueries({ queryKey: ['stock-movements', selectedItem.id] });
+      }
+      setIsAdjustFormOpen(false);
+      
+      toast.success(
+        `Stock adjusted successfully.`,
+        {
+          description: `The inventory has been updated.`
+        }
+      );
+    },
+    onError: (error: any) => {
+      toast.error(`Failed to adjust stock`, {
+        description: error.message || "An error occurred while adjusting the stock."
+      });
+    }
+  });
 
   const handleAddItem = (newItem: InventoryItem) => {
-    setItems((prevItems) => [...prevItems, newItem]);
-    setIsFormOpen(false);
-    toast.success(`${newItem.name} has been added to inventory.`, {
-      description: "Inventory updated successfully."
-    });
+    // Generate UUID if not present
+    if (!newItem.id) {
+      newItem.id = uuidv4();
+    }
+    addItemMutation.mutate(newItem);
   };
 
   const handleEditItem = (updatedItem: InventoryItem) => {
-    setItems((prevItems) =>
-      prevItems.map((item) => (item.id === updatedItem.id ? updatedItem : item))
-    );
-    setEditingItem(null);
-    toast.success(`${updatedItem.name} has been updated.`, {
-      description: "Inventory updated successfully."
-    });
+    updateItemMutation.mutate(updatedItem);
   };
 
   const handleDeleteItem = (id: string) => {
-    const itemToDelete = items.find((item) => item.id === id);
-    
-    // Delete associated stock movements
-    setMovements(prevMovements => 
-      prevMovements.filter(movement => movement.itemId !== id)
-    );
-    
-    // Delete the item
-    setItems((prevItems) => prevItems.filter((item) => item.id !== id));
-    
-    toast.error(itemToDelete 
-      ? `${itemToDelete.name} has been removed from inventory.`
-      : "Item has been removed from inventory.", {
-      description: "Inventory updated successfully."
-    });
+    deleteItemMutation.mutate(id);
   };
 
   const handleAdjustStock = (item: InventoryItem) => {
@@ -123,37 +165,7 @@ const Index = () => {
     itemId: string, 
     adjustment: Omit<StockMovement, "id" | "timestamp" | "itemId">
   ) => {
-    // Create the stock movement record
-    const newMovement: StockMovement = {
-      id: uuidv4(),
-      itemId,
-      timestamp: new Date(),
-      ...adjustment
-    };
-    
-    setMovements(prev => [...prev, newMovement]);
-    
-    // Update the item quantity
-    setItems(prev => 
-      prev.map(item => {
-        if (item.id === itemId) {
-          return {
-            ...item,
-            quantity: adjustment.quantityAfter
-          };
-        }
-        return item;
-      })
-    );
-    
-    setIsAdjustFormOpen(false);
-    
-    toast.success(
-      `Stock ${adjustment.adjustmentType === "increase" ? "increased" : "reduced"} successfully.`, 
-      {
-        description: `New quantity: ${adjustment.quantityAfter}`
-      }
-    );
+    adjustStockMutation.mutate({ itemId, adjustment });
   };
 
   const openEditDialog = (item: InventoryItem) => {
@@ -183,14 +195,40 @@ const Index = () => {
     item => item.minStockThreshold !== undefined && item.quantity <= item.minStockThreshold
   ).length;
 
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto mb-4"></div>
+          <p>Loading inventory...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Inventory Management</h1>
+            <div className="flex items-center">
+              <h1 className="text-3xl font-bold text-gray-900">Inventory Management</h1>
+              {user && (
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={signOut} 
+                  className="ml-4"
+                >
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Sign Out
+                </Button>
+              )}
+            </div>
             <p className="mt-2 text-gray-600">
-              Track and manage your inventory items efficiently
+              {user && (
+                <span>Welcome, {user.email}</span>
+              )}
             </p>
           </div>
           <Button 
@@ -349,7 +387,7 @@ const Index = () => {
           {selectedItem && (
             <StockMovementHistory
               item={selectedItem}
-              movements={movements.filter(m => m.itemId === selectedItem.id)}
+              movements={movements}
             />
           )}
         </DialogContent>
