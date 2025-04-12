@@ -113,16 +113,20 @@ const Auth = () => {
 
         <Card>
           <CardHeader>
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="login">Login</TabsTrigger>
-                <TabsTrigger value="register">Register</TabsTrigger>
-              </TabsList>
-            </Tabs>
+            <CardTitle>Authentication</CardTitle>
+            <CardDescription>
+              Sign in to your account or create a new one
+            </CardDescription>
           </CardHeader>
-          <CardContent>
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsContent value="login" className="mt-0">
+          
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="grid w-full grid-cols-2 mb-4">
+              <TabsTrigger value="login">Login</TabsTrigger>
+              <TabsTrigger value="register">Register</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="login">
+              <CardContent>
                 <Form {...loginForm}>
                   <form onSubmit={loginForm.handleSubmit(handleLogin)} className="space-y-4">
                     <FormField
@@ -156,9 +160,11 @@ const Auth = () => {
                     </Button>
                   </form>
                 </Form>
-              </TabsContent>
+              </CardContent>
+            </TabsContent>
 
-              <TabsContent value="register" className="mt-0">
+            <TabsContent value="register">
+              <CardContent>
                 <Form {...registerForm}>
                   <form onSubmit={registerForm.handleSubmit(handleRegister)} className="space-y-4">
                     <FormField
@@ -205,9 +211,10 @@ const Auth = () => {
                     </Button>
                   </form>
                 </Form>
-              </TabsContent>
-            </Tabs>
-          </CardContent>
+              </CardContent>
+            </TabsContent>
+          </Tabs>
+          
           <CardFooter className="flex justify-center">
             <p className="text-sm text-gray-500">
               {activeTab === 'login' ? "Don't have an account? " : "Already have an account? "}
